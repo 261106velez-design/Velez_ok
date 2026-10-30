@@ -157,6 +157,19 @@ nav.tabs svg{width:22px;height:22px}
 .sheet{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:flex-end}
 .sbox{width:100%;max-width:560px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px;display:flex;flex-direction:column;gap:12px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 .sbox textarea{min-height:200px;font-family:var(--f-mono)}
+.meta{position:fixed;inset:0;z-index:100;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:32px max(24px,env(safe-area-inset-left,0px));text-align:center}
+.meta .k{font-family:var(--f-display);color:var(--title);letter-spacing:.22em;font-size:12px;text-transform:uppercase;font-weight:700}
+.meta .t{font-family:var(--f-display);font-size:22px;line-height:1.55;font-weight:700;max-width:520px;text-wrap:balance;overflow-wrap:anywhere}
+.meta .bar2{width:120px;height:3px;background:var(--line);border-radius:3px;overflow:hidden}
+.meta .bar2 i{display:block;height:100%;background:var(--title);transform-origin:left;animation:shrink var(--d,2s) linear forwards}
+@keyframes shrink{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){.meta .bar2 i{animation:none}}
+.doc-g{font-family:var(--f-display);color:var(--title);font-size:14px;font-weight:800;letter-spacing:.03em;border-bottom:1px solid var(--line);padding-bottom:6px;margin-top:6px}
+.doc-e{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
+.doc-e .tt{font-family:var(--f-display);font-weight:700;font-size:14px}
+.doc-e dt{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-family:var(--f-display)}
+.doc-e dd{margin:2px 0 8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.doc-e dl{margin:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:30;max-width:90vw}
 .toast[hidden]{display:none}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp 0.8s linear infinite}
@@ -226,10 +239,10 @@ const VERSES=[
 const verseFor=s=>{const d=parse(s);const doy=Math.floor((d-new Date(d.getFullYear(),0,0))/864e5);return VERSES[doy%VERSES.length]};
 
 /* ---------- estado ---------- */
-const DEF_CFG={kcal:2200,protein:130,steps:10000,sleep:8,study:3,subjects:[],routines:[]};
+const DEF_CFG={kcal:2200,protein:130,steps:10000,sleep:8,study:3,subjects:[],routines:[],metas:[],metaSecs:2,templates:{}};
 const S={days:{},workouts:{},study:{},med:{},weeks:{},cfg:{...DEF_CFG},
-  date:todayStr(),tab:'hoy',gymView:'sesion',progSel:null,weekSel:monday(todayStr()),loaded:0,offline:false,error:''};
-const TOTAL_SUBS=6;
+  date:todayStr(),tab:'hoy',gymView:'sesion',progSel:null,notes:{},studyView:'horas',noteSubj:null,noteDraft:{id:null,values:{}},noteQ:'',tplEdit:false,metaShown:false,weekSel:monday(todayStr()),loaded:0,offline:false,error:''};
+const TOTAL_SUBS=7;
 let db=null;
 const medDraft={topic:'',source:'',explanation:'',image:null};
 const medUI={err:'',open:null};
@@ -357,6 +370,7 @@ const ICON={
   gear:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   x:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
 };
+ICON.target='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>';
 const TABS=[['hoy','Hoy'],['gym','Gym'],['estudio','Estudio'],['med','Medicina'],['semana','Semana']];
 
 function prog(label,val,goal,unit,dec){
@@ -557,7 +571,7 @@ function vProgreso(){
 }
 
 /* --- estudio --- */
-function vEstudio(){
+function vEstudioHoras(){
   const d=S.date,en=(S.study[d]||{}).entries||[],g=S.cfg;
   const mon=monday(d),dates=[...Array(7)].map((_,i)=>addDays(mon,i));
   const bySubj={};
@@ -574,6 +588,154 @@ function vEstudio(){
    +'<datalist id="sublist">'+subjList.map(s=>'<option value="'+esc(s)+'">').join('')+'</datalist>'
    +'<button class="btn" data-a="st-add">Añadir</button></section>'
    +'<section class="card"><div class="row"><h3>Esta semana por materia</h3><span class="sp"></span><span class="mono small muted">'+fmtN(sum(Object.values(bySubj)),1)+' h</span></div>'+(wk||'<p class="empty">Cuando registres horas, aquí ves cuánto va cada materia.</p>')+'</section>';
+}
+
+/* --- estudio: resumen por materia --- */
+const norm=t=>(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const PRESETS=[{match:/farmac/,fields:[
+  {id:'familia',label:'Familia del fármaco',long:false},
+  {id:'farmaco',label:'Fármaco',long:false,title:true},
+  {id:'mec_libro',label:'Mecanismo de acción (libro)',long:true},
+  {id:'mec_mio',label:'Mecanismo de acción con mis palabras',long:true},
+  {id:'dosis_adulto',label:'Dosis en adultos',long:true},
+  {id:'dosis_pedi',label:'Dosis pediátricas',long:true},
+  {id:'contra',label:'Contraindicaciones',long:true},
+  {id:'usos',label:'Principales usos',long:true}]}];
+const GENERIC=[
+  {id:'tema',label:'Tema',long:false},
+  {id:'libro',label:'Lo que dice el libro',long:true},
+  {id:'mio',label:'Con mis palabras',long:true},
+  {id:'clave',label:'Puntos clave',long:true}];
+function tplFor(subj){
+  const t=(S.cfg.templates||{})[subj];if(t&&t.length)return t;
+  const p=PRESETS.find(x=>x.match.test(norm(subj)));return p?p.fields:GENERIC;
+}
+function setTpl(subj,fn){
+  const t=clone(S.cfg.templates||{}),cur=clone(tplFor(subj));fn(cur);
+  t[subj]=cur;S.cfg={...S.cfg,templates:t};saveCfg();
+}
+function subjectList(){
+  const out=[...(S.cfg.subjects||[])];
+  const add=n=>{if(n&&!out.some(x=>norm(x)===norm(n)))out.push(n)};
+  Object.values(S.study).forEach(d=>(d.entries||[]).forEach(e=>add(e.subject)));
+  Object.values(S.notes).forEach(n=>add(n.subject));
+  return out;
+}
+function curSubj(){
+  const l=subjectList();
+  if(S.noteSubj&&l.some(x=>norm(x)===norm(S.noteSubj)))return l.find(x=>norm(x)===norm(S.noteSubj));
+  return l[0]||null;
+}
+function docGroups(subj,q){
+  const f=tplFor(subj),first=f[0].id,title=(f.find(x=>x.title)||{}).id;
+  let ns=Object.entries(S.notes).map(([id,n])=>({id,...n})).filter(n=>norm(n.subject)===norm(subj));
+  if(q){const k=norm(q);ns=ns.filter(n=>norm(Object.values(n.values||{}).join(' ')).includes(k))}
+  const g={};
+  ns.forEach(n=>{const key=((n.values||{})[first]||'').trim()||('Sin '+f[0].label.toLowerCase());(g[key]=g[key]||[]).push(n)});
+  const keys=Object.keys(g).sort((a,b)=>a.localeCompare(b,'es'));
+  keys.forEach(k=>g[k].sort((a,b)=>title?((a.values||{})[title]||'').localeCompare((b.values||{})[title]||'','es'):(a.createdAt||0)-(b.createdAt||0)));
+  return {f,keys,g,title,total:ns.length};
+}
+function entryHtml(n,f,title){
+  const v=n.values||{};
+  const rows=f.filter(x=>x.id!==f[0].id&&x.id!==title&&(v[x.id]||'').trim()).map(x=>'<dt>'+esc(x.label)+'</dt><dd>'+esc(v[x.id])+'</dd>').join('');
+  return '<div class="doc-e">'+(title?'<div class="tt">'+esc(v[title]||'Sin nombre')+'</div>':'')+(rows?'<dl>'+rows+'</dl>':'')
+   +'<div class="row wrapr"><span class="small muted">'+shortDate(n.date||todayStr())+'</span><span class="sp"></span><button class="btn ghost sm" data-a="note-edit" data-id="'+esc(n.id)+'">Editar</button><button class="btn ghost sm" data-a="note-del" data-id="'+esc(n.id)+'">Borrar</button></div></div>';
+}
+function noteListHtml(){
+  const subj=curSubj();if(!subj)return '';
+  const d=docGroups(subj,S.noteQ);
+  if(!d.total)return '<p class="empty">'+(S.noteQ?'No encontré nada con esa búsqueda.':'Todavía no hay registros. Llena el formulario de arriba y se irá armando tu documento.')+'</p>';
+  return d.keys.map(k=>'<div class="doc-g">'+esc(k)+'</div>'+d.g[k].map(n=>entryHtml(n,d.f,d.title)).join('')).join('');
+}
+function docText(subj){
+  const d=docGroups(subj,''),out=['# Resumen de '+subj,'(actualizado '+todayStr()+')',''];
+  d.keys.forEach(k=>{
+    out.push('## '+k,'');
+    d.g[k].forEach(n=>{
+      const v=n.values||{};
+      if(d.title)out.push('### '+(v[d.title]||'Sin nombre'));
+      d.f.filter(x=>x.id!==d.f[0].id&&x.id!==d.title&&(v[x.id]||'').trim()).forEach(x=>out.push('- '+x.label+': '+v[x.id].trim().replace(/\n+/g,' ')));
+      out.push('');
+    });
+  });
+  return out.join('\n');
+}
+function docHtml(subj){
+  const d=docGroups(subj,'');
+  let b='<h1>Resumen de '+esc(subj)+'</h1><p>Actualizado '+todayStr()+'</p>';
+  d.keys.forEach(k=>{
+    b+='<h2>'+esc(k)+'</h2>';
+    d.g[k].forEach(n=>{
+      const v=n.values||{};
+      if(d.title)b+='<h3>'+esc(v[d.title]||'Sin nombre')+'</h3>';
+      b+='<table>'+d.f.filter(x=>x.id!==d.f[0].id&&x.id!==d.title&&(v[x.id]||'').trim()).map(x=>'<tr><td class="l">'+esc(x.label)+'</td><td>'+esc(v[x.id]).replace(/\n/g,'<br>')+'</td></tr>').join('')+'</table>';
+    });
+  });
+  return '<html><head><meta charset="utf-8"><title>Resumen de '+esc(subj)+'</title><style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#111}h1{font-size:20pt}h2{font-size:15pt;color:#9c2229;border-bottom:1px solid #999;margin-top:22px}h3{font-size:12pt;margin:14px 0 4px}table{border-collapse:collapse;width:100%;margin-bottom:8px}td{border:1px solid #999;padding:5px;vertical-align:top}td.l{width:30%;font-weight:bold;background:#f2f2f2}</style></head><body>'+b+'</body></html>';
+}
+function downloadBlob(name,type,text){
+  const blob=new Blob([text],{type}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+function segBar(items,cur,action){
+  return '<div class="seg" style="grid-template-columns:repeat('+items.length+',1fr)">'+items.map(x=>'<button data-a="'+action+'" data-v="'+x[0]+'" class="'+(cur===x[0]?'on':'')+'">'+x[1]+'</button>').join('')+'</div>';
+}
+function vEstudio(){
+  const bar=segBar([['horas','Horas'],['resumen','Resumen']],S.studyView,'sview');
+  return bar+(S.studyView==='resumen'?vResumen():vEstudioHoras());
+}
+function vResumen(){
+  const list=subjectList(),subj=curSubj();
+  const chips=list.length?'<div class="chips">'+list.map((x,i)=>'<button class="chip btnchip'+(subj&&norm(x)===norm(subj)?' on':'')+'" data-a="nsubj" data-i="'+i+'">'+esc(x)+'</button>').join('')+'</div>':'<p class="empty">Añade tu primera materia para empezar a armar su documento.</p>';
+  const addSubj='<div class="row"><input id="nsubj_new" placeholder="Nueva materia" autocomplete="off"><button class="btn sm" data-a="nsubj-add">Añadir</button></div>';
+  let head='<section class="card"><h3>Resumen por materia</h3>'+chips+addSubj+'</section>';
+  if(!subj)return head;
+  const f=tplFor(subj),dr=S.noteDraft,count=docGroups(subj,'').total;
+  const form='<section class="card"><div class="row"><h3>'+(dr.id?'Editando registro':'Nuevo registro')+'</h3><span class="sp"></span><span class="small muted">'+esc(subj)+'</span></div>'
+   +f.map(fl=>'<label class="fld"><span>'+esc(fl.label)+'</span>'+(fl.long?'<textarea style="min-height:84px" data-f="nd" data-fid="'+esc(fl.id)+'">'+esc((dr.values||{})[fl.id]||'')+'</textarea>':'<input data-f="nd" data-fid="'+esc(fl.id)+'" autocomplete="off" value="'+esc((dr.values||{})[fl.id]||'')+'">')+'</label>').join('')
+   +'<div class="row wrapr"><button class="btn" data-a="note-save">'+(dr.id?'Guardar cambios':'Guardar en el resumen')+'</button>'+(dr.id?'<button class="btn ghost" data-a="note-cancel">Cancelar</button>':'')+'</div></section>';
+  const doc='<section class="card"><div class="row"><h3>Documento de '+esc(subj)+'</h3><span class="sp"></span><span class="small muted">'+count+' '+(count===1?'registro':'registros')+'</span></div>'
+   +'<div class="row wrapr"><button class="btn ghost sm" data-a="doc-copy">Copiar texto</button><button class="btn ghost sm" data-a="doc-dl">Descargar .doc</button><button class="btn ghost sm" data-a="tpl-edit">'+(S.tplEdit?'Cerrar campos':'Editar campos')+'</button></div>'
+   +'<input id="nsearch" data-f="nsearch" placeholder="Buscar en este documento" value="'+esc(S.noteQ)+'" autocomplete="off">'
+   +'<div id="noteList" style="display:flex;flex-direction:column;gap:12px">'+noteListHtml()+'</div></section>';
+  const tpl=S.tplEdit?'<section class="card"><h3>Campos de '+esc(subj)+'</h3><p class="small muted">El primer campo agrupa el documento (por ejemplo la familia del fármaco). Cambiar los campos no borra lo que ya escribiste.</p>'
+   +f.map((fl,i)=>'<div class="row"><input data-f="tpl" data-i="'+i+'" value="'+esc(fl.label)+'"><button class="x" data-a="tpl-del" data-i="'+i+'" aria-label="Quitar campo">'+ICON.x+'</button></div>').join('')
+   +'<div class="row wrapr"><button class="btn ghost sm" data-a="tpl-add">+ Campo</button><span class="sp"></span><button class="btn ghost sm" data-a="tpl-reset">Restablecer</button></div></section>':'';
+  return head+form+doc+tpl;
+}
+
+/* --- meta --- */
+let metaTimer=null;
+function closeMeta(){clearTimeout(metaTimer);const el=document.getElementById('metaOv');if(el)el.remove()}
+function showMeta(){
+  const list=(S.cfg.metas||[]).map(m=>(m.text||'').trim()).filter(Boolean);
+  if(!list.length)return;
+  let i=Math.floor(Math.random()*list.length);
+  const last=lsGet('velez.lastMeta');
+  if(list.length>1&&i===last)i=(i+1+Math.floor(Math.random()*(list.length-1)))%list.length;
+  lsSet('velez.lastMeta',i);
+  closeMeta();
+  const secs=Math.min(10,Math.max(1,Number(S.cfg.metaSecs)||2));
+  const el=document.createElement('div');el.id='metaOv';el.className='meta';el.setAttribute('role','alert');el.style.setProperty('--d',secs+'s');
+  el.innerHTML='<div class="k">Mi meta</div><div class="t"></div><div class="bar2"><i></i></div>';
+  el.querySelector('.t').textContent=list[i];
+  document.body.appendChild(el);
+  metaTimer=setTimeout(closeMeta,secs*1000);
+}
+let hiddenAt=0;
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){hiddenAt=Date.now()}
+  else if(hiddenAt&&Date.now()-hiddenAt>30000&&S.loaded>=TOTAL_SUBS){hiddenAt=0;showMeta()}
+});
+function vMeta(){
+  const ms=S.cfg.metas||[];
+  return '<section class="card"><h3>Mis metas</h3><p class="small muted">Escribe lo que quieres lograr. Cada vez que abras la app aparece una al azar a pantalla completa y se quita sola, sin botón para cerrarla.</p>'
+   +(ms.length?ms.map((m,i)=>'<div class="row" style="align-items:flex-start"><textarea style="min-height:64px" data-f="meta" data-i="'+i+'" placeholder="Mi meta">'+esc(m.text||'')+'</textarea><button class="x" data-a="meta-del" data-i="'+i+'" aria-label="Quitar meta">'+ICON.x+'</button></div>').join(''):'<p class="empty">Todavía no tienes metas. Añade la primera abajo.</p>')
+   +'<label class="fld"><span>Nueva meta</span><textarea id="meta_new" style="min-height:64px" placeholder="Ej. Pasar farmacología con 90 o más"></textarea></label>'
+   +'<button class="btn" data-a="meta-add">Añadir meta</button></section>'
+   +'<section class="card"><h3>Cuánto tiempo se muestra</h3><div class="grid2"><label class="fld"><span>Segundos en pantalla</span><div class="in"><input type="number" inputmode="numeric" min="1" max="10" data-f="cfg" data-k="metaSecs" value="'+esc(S.cfg.metaSecs??2)+'"><em>s</em></div></label></div>'
+   +'<button class="btn ghost" data-a="meta-test">Ver cómo se ve</button></section>';
 }
 
 /* --- medicina --- */
@@ -661,10 +823,10 @@ function vAjustes(){
 function render(){
   const app=$('#app');
   $('#nav').innerHTML=TABS.map(t=>'<button data-a="tab" data-t="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'" aria-label="'+t[1]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+ICON[t[0]==='med'?'med':t[0]]+'<span>'+t[1]+'</span></button>').join('');
-  const head='<div class="top"><div><div class="eyebrow">Bitácora</div><h1>Hola, Velez</h1></div><button class="iconbtn" data-a="tab" data-t="ajustes" aria-label="Ajustes">'+ICON.gear+'</button></div>';
+  const head='<div class="top"><div><div class="eyebrow">Bitácora</div><h1>Hola, Velez</h1></div><div class="row" style="gap:8px"><button class="iconbtn" data-a="tab" data-t="meta" aria-label="Meta">'+ICON.target+'</button><button class="iconbtn" data-a="tab" data-t="ajustes" aria-label="Ajustes">'+ICON.gear+'</button></div></div>';
   if(S.offline){app.innerHTML=head+'<section class="card"><h3>No puedo guardar tus datos</h3><p class="muted">Esta página necesita abrirse con tu sesión de Claude iniciada para usar su base de datos. Abre el enlace desde Safari con tu cuenta iniciada.</p></section>';return}
   if(S.loaded<TOTAL_SUBS){app.innerHTML=head+'<section class="card"><p class="muted"><span class="spin"></span> Cargando tus datos…</p></section>';return}
-  const v={hoy:vHoy,gym:vGym,estudio:vEstudio,med:vMed,semana:vSemana,ajustes:vAjustes}[S.tab]||vHoy;
+  const v={hoy:vHoy,gym:vGym,estudio:vEstudio,med:vMed,semana:vSemana,meta:vMeta,ajustes:vAjustes}[S.tab]||vHoy;
   app.innerHTML=head+v();
   tick();
 }
@@ -724,7 +886,33 @@ document.addEventListener('click',async ev=>{
       const m=Math.max(1,Math.round((Date.now()-sw.start)/60000));
       lsSet('velez.sw',null);
       const w=ensureW();w.minutes=(w.minutes||0)+m;commitW(w,true);toast('Se sumaron '+m+' min');break}
-    /* estudio */
+    /* estudio / resumen / meta */
+    case 'sview':S.studyView=ds.v;render();break;
+    case 'nsubj':{const l=subjectList();S.noteSubj=l[+ds.i];S.noteDraft={id:null,values:{}};S.noteQ='';S.tplEdit=false;render();break}
+    case 'nsubj-add':{
+      const v=($('#nsubj_new').value||'').trim();if(!v)break;
+      if(!subjectList().some(x=>norm(x)===norm(v))){S.cfg={...S.cfg,subjects:[...(S.cfg.subjects||[]),v]};saveCfg()}
+      S.noteSubj=v;S.noteDraft={id:null,values:{}};render();break}
+    case 'note-save':{
+      const subj=curSubj(),dr=S.noteDraft;if(!subj)break;
+      if(!Object.values(dr.values||{}).some(x=>(x||'').trim())){toast('Escribe algo antes de guardar');break}
+      const id=dr.id||('n'+Date.now()),old=S.notes[id]||{};
+      S.notes[id]={subject:subj,date:old.date||todayStr(),createdAt:old.createdAt||Date.now(),updatedAt:Date.now(),values:clone(dr.values)};
+      await saveDoc('notes',id);S.noteDraft={id:null,values:{}};toast('Guardado en el resumen de '+subj);render();break}
+    case 'note-cancel':S.noteDraft={id:null,values:{}};render();break;
+    case 'note-edit':{const n=S.notes[ds.id];if(!n)break;S.noteDraft={id:ds.id,values:clone(n.values||{})};render();window.scrollTo(0,0);break}
+    case 'note-del':{
+      if(ds.confirm!=='1'){b.dataset.confirm='1';b.textContent='¿Seguro?';break}
+      delete S.notes[ds.id];await db.doc('notes/'+ds.id).delete();render();break}
+    case 'doc-copy':{const subj=curSubj();if(subj)copyText(docText(subj),'Copia todo este texto');break}
+    case 'doc-dl':{const subj=curSubj();if(!subj)break;downloadBlob('Resumen-'+norm(subj).replace(/[^a-z0-9-]+/g,'_')+'.doc','application/msword',docHtml(subj));toast('Si no se descarga, usa «Copiar texto»');break}
+    case 'tpl-edit':S.tplEdit=!S.tplEdit;render();break;
+    case 'tpl-add':{const subj=curSubj();if(!subj)break;setTpl(subj,c=>c.push({id:'f'+Date.now(),label:'Nuevo campo',long:true}));render();break}
+    case 'tpl-del':{const subj=curSubj();if(!subj)break;setTpl(subj,c=>{if(c.length>1)c.splice(+ds.i,1)});render();break}
+    case 'tpl-reset':{const subj=curSubj();if(!subj)break;const t=clone(S.cfg.templates||{});delete t[subj];S.cfg={...S.cfg,templates:t};saveCfg();render();break}
+    case 'meta-add':{const t=($('#meta_new').value||'').trim();if(!t){toast('Escribe tu meta');break}S.cfg={...S.cfg,metas:[...(S.cfg.metas||[]),{id:'m'+Date.now(),text:t}]};saveCfg();render();break}
+    case 'meta-del':{const c=clone(S.cfg.metas||[]);c.splice(+ds.i,1);S.cfg={...S.cfg,metas:c};saveCfg();render();break}
+    case 'meta-test':showMeta();break;
     case 'st-add':{
       const subj=($('#st_subj').value||'').trim(),h=parseFloat($('#st_hrs').value);
       if(!subj||!(h>0)){toast('Escribe la materia y las horas');break}
@@ -775,6 +963,12 @@ document.addEventListener('change',ev=>{
       const s=e.sets[+el.dataset.si];s[g]=el.value===''?null:Number(el.value);
     }
     commitW(w,false);
+  }else if(f==='tpl'){
+    const subj=curSubj();if(!subj)return;
+    setTpl(subj,c=>{if(c[+el.dataset.i])c[+el.dataset.i].label=el.value.trim()||'Campo'});
+  }else if(f==='meta'){
+    const c=clone(S.cfg.metas||[]);if(!c[+el.dataset.i])return;
+    c[+el.dataset.i].text=el.value.trim();S.cfg={...S.cfg,metas:c};saveCfg();
   }else if(f==='rt'){
     const c=clone(S.cfg.routines||[]),r=c[+el.dataset.ri];if(!r)return;
     if(el.dataset.k==='name')r.name=el.value.trim();else r.exercises[+el.dataset.ei]=el.value.trim();
@@ -790,7 +984,10 @@ document.addEventListener('change',ev=>{
   }
 });
 document.addEventListener('input',ev=>{
-  const el=ev.target;if(el.dataset&&el.dataset.f==='md')medDraft[el.dataset.m]=el.value;
+  const el=ev.target,f=el.dataset&&el.dataset.f;
+  if(f==='md')medDraft[el.dataset.m]=el.value;
+  else if(f==='nd')S.noteDraft.values[el.dataset.fid]=el.value;
+  else if(f==='nsearch'){S.noteQ=el.value;const box=document.getElementById('noteList');if(box)box.innerHTML=noteListHtml()}
 });
 
 /* ---------- medicina: guardar ---------- */
@@ -839,7 +1036,7 @@ async function copyText(t,title){
 }
 function exportObj(withImages){
   const med={};Object.entries(S.med).forEach(([k,m])=>{const c={...m};if(!withImages)delete c.image;med[k]=c});
-  return {version:1,days:S.days,workouts:S.workouts,study:S.study,med,weeks:S.weeks,cfg:S.cfg};
+  return {version:1,days:S.days,workouts:S.workouts,study:S.study,med,weeks:S.weeks,notes:S.notes,cfg:S.cfg};
 }
 function downloadJSON(){
   const blob=new Blob([JSON.stringify(exportObj(true))],{type:'application/json'}),a=document.createElement('a');
@@ -850,7 +1047,7 @@ async function importJSON(txt){
   let o;try{o=JSON.parse(txt)}catch(e){toast('Eso no es un JSON válido');return false}
   if(!o||typeof o!=='object'){toast('Eso no es un JSON válido');return false}
   let n=0;
-  for(const coll of ['days','workouts','study','med','weeks']){
+  for(const coll of ['days','workouts','study','med','weeks','notes']){
     const src=o[coll];if(!src||typeof src!=='object')continue;
     for(const [id,v] of Object.entries(src)){
       if(!/^[A-Za-z0-9_.\-]{1,80}$/.test(id)||!v||typeof v!=='object')continue;
@@ -920,6 +1117,7 @@ function sub(name,key){
     const o={};snap.docs.forEach(d=>{o[d.id]=d.data()});
     if(name==='config'){S.cfg={...DEF_CFG,...(o.main||{})}}else{S[key]=o}
     if(!sub.seen[name]){sub.seen[name]=1;S.loaded++}
+    if(S.loaded>=TOTAL_SUBS&&!S.metaShown){S.metaShown=true;showMeta()}
     scheduleRender();
   });
 }
@@ -928,7 +1126,7 @@ render();
 (async()=>{
   try{await Store.init()}catch(e){console.error(e)}
   db=Store;
-  sub('days','days');sub('workouts','workouts');sub('study','study');sub('med','med');sub('weeks','weeks');sub('config','cfg');
+  sub('days','days');sub('workouts','workouts');sub('study','study');sub('med','med');sub('weeks','weeks');sub('config','cfg');sub('notes','notes');
   if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 })();

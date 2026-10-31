@@ -176,6 +176,20 @@ nav.tabs svg{width:22px;height:22px}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 </style>
+<script>
+(function(){
+  function show(msg){
+    try{
+      var app=document.getElementById('app');
+      if(!app||(app.innerText||'').replace(/\s/g,'').length>40)return;
+      app.innerHTML='<section class="card"><h3>No pude abrir la bitácora</h3><p class="small muted">Cierra la app por completo y ábrela otra vez con internet. Tus datos no se borraron. Si sigue igual, mándame esta captura:</p><p class="small" style="overflow-wrap:anywhere">'+String(msg).replace(/[<>&]/g,'')+'</p></section>';
+    }catch(e){}
+  }
+  window.addEventListener('error',function(ev){show((ev.message||'Error')+(ev.lineno?' (línea '+ev.lineno+')':''))});
+  window.addEventListener('unhandledrejection',function(ev){show((ev.reason&&ev.reason.message)||ev.reason||'Error')});
+  setTimeout(function(){var a=document.getElementById('app');if(a&&!(a.innerText||'').trim())show('La pantalla no se dibujó en 6 segundos')},6000);
+})();
+</script>
 </head>
 <body>
 <div class="wrap" id="app"></div>
@@ -241,8 +255,8 @@ const verseFor=s=>{const d=parse(s);const doy=Math.floor((d-new Date(d.getFullYe
 /* ---------- estado ---------- */
 const DEF_CFG={kcal:2200,protein:130,steps:10000,sleep:8,study:3,subjects:[],routines:[],metas:[],metaSecs:2,templates:{}};
 const S={days:{},workouts:{},study:{},med:{},weeks:{},cfg:{...DEF_CFG},
-  date:todayStr(),tab:'hoy',gymView:'sesion',progSel:null,notes:{},studyView:'horas',noteSubj:null,noteDraft:{id:null,values:{}},noteQ:'',tplEdit:false,metaShown:false,weekSel:monday(todayStr()),loaded:0,offline:false,error:''};
-const TOTAL_SUBS=7;
+  date:todayStr(),tab:'hoy',gymView:'sesion',progSel:null,notes:{},measures:{},measSel:'cintura',studyView:'horas',noteSubj:null,noteDraft:{id:null,values:{}},noteQ:'',tplEdit:false,metaShown:false,weekSel:monday(todayStr()),loaded:0,offline:false,error:''};
+const TOTAL_SUBS=8;
 let db=null;
 const medDraft={topic:'',source:'',explanation:'',image:null};
 const medUI={err:'',open:null};
@@ -340,9 +354,8 @@ function bars(vals,goal,f){
   });
   return s+'</svg>';
 }
-function weightChart(){
-  const pts=Object.entries(S.days).filter(([d,x])=>num(x.weight)!=null).map(([d,x])=>({d,w:x.weight})).sort((a,b)=>a.d<b.d?-1:1).slice(-90);
-  if(pts.length<2)return '<p class="empty">Con dos o más pesos registrados aparece la gráfica.</p>';
+function dateLine(pts,aria,emptyMsg){
+  if(pts.length<2)return '<p class="empty">'+emptyMsg+'</p>';
   const W=320,H=140,pl=34,pr=10,pt=12,pb=20;
   const t0=parse(pts[0].d).getTime(),t1=parse(pts[pts.length-1].d).getTime()||t0+1;
   let lo=Math.min(...pts.map(p=>p.w)),hi=Math.max(...pts.map(p=>p.w));
@@ -350,12 +363,16 @@ function weightChart(){
   const pad2=(hi-lo)*.15;lo-=pad2;hi+=pad2;
   const X=d=>pl+(W-pl-pr)*((parse(d).getTime()-t0)/Math.max(1,t1-t0));
   const Y=w=>pt+(H-pt-pb)*(1-(w-lo)/(hi-lo));
-  let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Peso en ayunas">';
+  let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+aria+'">';
   [lo+pad2,hi-pad2].forEach(v=>{s+='<line class="grid" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(v)+'" y2="'+Y(v)+'"/><text x="'+(pl-4)+'" y="'+(Y(v)+3)+'" text-anchor="end">'+fmtN(v,1)+'</text>'});
   s+='<polyline class="ln" points="'+pts.map(p=>X(p.d)+','+Y(p.w)).join(' ')+'"/>';
-  pts.forEach((p,i)=>{s+='<circle class="dot" cx="'+X(p.d)+'" cy="'+Y(p.w)+'" r="'+(pts.length>30?2:3.5)+'"/>'});
+  pts.forEach(p=>{s+='<circle class="dot" cx="'+X(p.d)+'" cy="'+Y(p.w)+'" r="'+(pts.length>30?2:3.5)+'"/>'});
   s+='<text x="'+pl+'" y="'+(H-5)+'">'+shortDate(pts[0].d)+'</text><text x="'+(W-pr)+'" y="'+(H-5)+'" text-anchor="end">'+shortDate(pts[pts.length-1].d)+'</text></svg>';
   return s;
+}
+function weightChart(){
+  const pts=Object.entries(S.days).filter(([d,x])=>num(x.weight)!=null).map(([d,x])=>({d,w:x.weight})).sort((a,b)=>a.d<b.d?-1:1).slice(-90);
+  return dateLine(pts,'Peso en ayunas','Con dos o más pesos registrados aparece la gráfica.');
 }
 
 /* ---------- vistas ---------- */
@@ -398,6 +415,10 @@ function vHoy(){
     medCard=meds.length
       ?'<div class="banner done"><div class="t"><b>Medicina del día lista</b><span class="small muted">'+esc(meds[0].topic||'Sin tema')+' · racha de '+medStreak()+' '+(medStreak()===1?'día':'días')+'</span></div></div>'
       :'<div class="banner todo"><div class="t"><b>Falta tu estudio de medicina</b><span class="small muted">Sube algo, explícalo y recibe la revisión.</span></div><button class="btn sm" data-a="tab" data-t="med">Hacerlo</button></div>';
+  }
+  {
+    const mk=monday(d),hasM=S.measures[mk]&&Object.values(S.measures[mk].values||{}).some(x=>x!=null);
+    if(parse(d).getDay()===0&&!isFuture&&!hasM)medCard+='<div class="banner todo"><div class="t"><b>Hoy toca medirte</b><span class="small muted">Domingo: circunferencias de la semana.</span></div><button class="btn sm" data-a="meas-go">Medirme</button></div>';
   }
   const chips=[['Peso',day.weight!=null],['Comida',day.kcal!=null],['Pasos',day.steps!=null],['Sueño',day.sleep!=null],['Estudio',sh>0],['Gym',gymOn],['Medicina',meds.length>0]]
     .map(c=>'<span class="chip'+(c[1]?' on':'')+'">'+(c[1]?'✓ ':'')+c[0]+'</span>').join('');
@@ -722,6 +743,7 @@ function showMeta(){
   el.querySelector('.t').textContent=list[i];
   document.body.appendChild(el);
   metaTimer=setTimeout(closeMeta,secs*1000);
+  setTimeout(closeMeta,secs*1000+2000);
 }
 let hiddenAt=0;
 document.addEventListener('visibilitychange',()=>{
@@ -770,6 +792,34 @@ function dlt(cur,prev,dec,unit){
   const x=cur-prev;if(Math.abs(x)<Math.pow(10,-(dec||0))/2)return '<span class="delta">= semana previa</span>';
   return '<span class="delta">'+(x>0?'▲ +':'▼ ')+fmtN(x,dec)+unit+' vs previa</span>';
 }
+const MEAS=[['pierna','Pierna'],['cintura','Cintura'],['brazo','Brazo'],['cuello','Cuello'],['pantorrilla','Pantorrilla'],['pecho','Pecho']];
+function measPrev(mon,k){
+  const ks=Object.keys(S.measures).filter(w=>w<mon&&((S.measures[w].values||{})[k])!=null).sort();
+  const w=ks[ks.length-1];return w?{wk:w,v:S.measures[w].values[k]}:null;
+}
+const sgn=x=>(x>0?'+':'')+fmtN(x,1);
+function goalCard(mon){
+  const g=(S.weeks[mon]||{}).goal||'';
+  return '<section class="card"><h3>Objetivo de la semana</h3><p class="small muted">Escribe qué buscas esta semana, por ejemplo «bajar cintura sin perder fuerza». Lo incluyo cuando evalúo tu semana.</p>'
+   +'<textarea id="wgoal" style="min-height:70px" data-f="wgoal" placeholder="Mi objetivo">'+esc(g)+'</textarea></section>';
+}
+function measCard(mon){
+  const m=S.measures[mon]||{},cur=m.values||{};
+  const fields=MEAS.map(([k,l])=>{
+    const pv=measPrev(mon,k),v=cur[k];
+    const hint=pv?'Anterior: '+fmtN(pv.v,1)+(v!=null?' ('+sgn(v-pv.v)+')':''):'';
+    return '<label class="fld"><span>'+l+'</span><div class="in"><input type="number" inputmode="decimal" step="any" min="0" data-f="meas" data-k="'+k+'" value="'+esc(v??'')+'" placeholder="—"><em>cm</em></div>'+(hint?'<small class="delta">'+hint+'</small>':'')+'</label>';
+  }).join('');
+  const sel=MEAS.some(x=>x[0]===S.measSel)?S.measSel:'cintura',lab=(MEAS.find(x=>x[0]===sel)||[])[1];
+  const pts=Object.entries(S.measures).filter(([w,x])=>((x.values||{})[sel])!=null).map(([w,x])=>({d:w,w:x.values[sel]})).sort((a,b)=>a.d<b.d?-1:1);
+  const l=pts[pts.length-1],pv=pts.length>1?pts[pts.length-2]:null,f0=pts[0];
+  const stats=l?'<div class="mstats"><div class="ms"><b>'+fmtN(l.w,1)+'</b><span>Actual cm</span></div><div class="ms"><b>'+(pv?sgn(l.w-pv.w):'—')+'</b><span>vs previa</span></div><div class="ms"><b>'+(pts.length>1?sgn(l.w-f0.w):'—')+'</b><span>vs primera</span></div></div>':'';
+  return '<section class="card" id="measCard"><div class="row"><h3>Medidas del domingo</h3><span class="sp"></span><span class="small muted">'+(m.date?'Medido '+shortDate(m.date):'Sin medir')+'</span></div>'
+   +'<div class="grid2">'+fields+'</div>'
+   +'<details><summary class="eyebrow" style="cursor:pointer">Cómo medirte</summary><div class="small muted" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"><p>Lo más importante es medir siempre igual: mismo día, misma hora (mejor en ayunas), mismo punto del cuerpo y la cinta pegada a la piel sin apretar.</p><p><b style="color:var(--fg)">Cintura:</b> a la altura del ombligo, al final de una exhalación normal. <b style="color:var(--fg)">Pecho:</b> a la altura de los pezones, con los brazos relajados. <b style="color:var(--fg)">Cuello:</b> justo debajo de la nuez. <b style="color:var(--fg)">Brazo:</b> a la mitad entre hombro y codo; elige relajado o flexionado y repite siempre lo mismo. <b style="color:var(--fg)">Pierna:</b> parte más ancha del muslo, de pie. <b style="color:var(--fg)">Pantorrilla:</b> parte más ancha, de pie.</p></div></details>'
+   +'<div class="eyebrow">Evolución</div><div class="chips">'+MEAS.map(x=>'<button class="chip btnchip'+(sel===x[0]?' on':'')+'" data-a="msel" data-k="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>'
+   +stats+dateLine(pts,'Evolución de '+lab,'Con dos mediciones de '+lab.toLowerCase()+' aparece la gráfica.')+'</section>';
+}
 function vSemana(){
   const mon=S.weekSel,st=weekStats(mon),pv=weekStats(addDays(mon,-7)),g=S.cfg;
   const ob=S.weeks[mon]||{};
@@ -783,6 +833,7 @@ function vSemana(){
     :'<p class="empty">Todavía no hay observaciones de esta semana. Toca «Copiar resumen para Claude», pégalo en el chat con Claude y luego importa lo que te devuelva en Ajustes.</p>';
   return '<div class="datebar"><button data-a="wprev" aria-label="Semana anterior">'+ICON.prev+'</button><div class="mid"><b>'+shortDate(mon)+' – '+shortDate(addDays(mon,6))+'</b>'+(cur?'<span class="small muted">Esta semana</span>':'<a data-a="wnow">Ir a esta semana</a>')+'</div><button data-a="wnext" aria-label="Semana siguiente"'+(cur?' disabled style="opacity:.3"':'')+'>'+ICON.next+'</button></div>'
    +'<section class="card obs"><h3>Observaciones de Claude</h3>'+obsHtml+(ob.updatedAt?'<p class="small muted">Actualizado el '+esc(ob.updatedAt)+'</p>':'')+'</section>'
+   +goalCard(mon)+measCard(mon)
    +'<section class="card"><div class="row wrapr"><button class="btn ghost sm" data-a="wcopy">Copiar resumen para Claude</button></div></section>'
    +'<div class="stats">'
    +stat('Peso en ayunas',st.w1!=null?fmtN(st.w1,1):'—','kg',wd!=null?'<span class="delta">'+(wd>0?'▲ +':wd<0?'▼ ':'= ')+fmtN(wd,1)+' en la semana</span>':'')
@@ -824,7 +875,7 @@ function render(){
   const app=$('#app');
   $('#nav').innerHTML=TABS.map(t=>'<button data-a="tab" data-t="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'" aria-label="'+t[1]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+ICON[t[0]==='med'?'med':t[0]]+'<span>'+t[1]+'</span></button>').join('');
   const head='<div class="top"><div><div class="eyebrow">Bitácora</div><h1>Hola, Velez</h1></div><div class="row" style="gap:8px"><button class="iconbtn" data-a="tab" data-t="meta" aria-label="Meta">'+ICON.target+'</button><button class="iconbtn" data-a="tab" data-t="ajustes" aria-label="Ajustes">'+ICON.gear+'</button></div></div>';
-  if(S.offline){app.innerHTML=head+'<section class="card"><h3>No puedo guardar tus datos</h3><p class="muted">Esta página necesita abrirse con tu sesión de Claude iniciada para usar su base de datos. Abre el enlace desde Safari con tu cuenta iniciada.</p></section>';return}
+  if(S.offline){app.innerHTML=head+'<section class="card"><h3>No pude abrir tus datos</h3><p class="muted">'+esc(S.offlineMsg||'Cierra la app por completo y vuelve a abrirla.')+' Tus datos no se borraron.</p></section>';return}
   if(S.loaded<TOTAL_SUBS){app.innerHTML=head+'<section class="card"><p class="muted"><span class="spin"></span> Cargando tus datos…</p></section>';return}
   const v={hoy:vHoy,gym:vGym,estudio:vEstudio,med:vMed,semana:vSemana,meta:vMeta,ajustes:vAjustes}[S.tab]||vHoy;
   app.innerHTML=head+v();
@@ -887,6 +938,8 @@ document.addEventListener('click',async ev=>{
       lsSet('velez.sw',null);
       const w=ensureW();w.minutes=(w.minutes||0)+m;commitW(w,true);toast('Se sumaron '+m+' min');break}
     /* estudio / resumen / meta */
+    case 'meas-go':S.weekSel=monday(S.date);S.tab='semana';render();{const el=document.getElementById('measCard');if(el)el.scrollIntoView()}break;
+    case 'msel':S.measSel=ds.k;render();break;
     case 'sview':S.studyView=ds.v;render();break;
     case 'nsubj':{const l=subjectList();S.noteSubj=l[+ds.i];S.noteDraft={id:null,values:{}};S.noteQ='';S.tplEdit=false;render();break}
     case 'nsubj-add':{
@@ -963,6 +1016,12 @@ document.addEventListener('change',ev=>{
       const s=e.sets[+el.dataset.si];s[g]=el.value===''?null:Number(el.value);
     }
     commitW(w,false);
+  }else if(f==='meas'){
+    const mon=S.weekSel,cur=clone(S.measures[mon]||{date:(todayStr()<addDays(mon,6)?todayStr():addDays(mon,6)),values:{}});
+    cur.values=cur.values||{};const v=el.value===''?null:Number(el.value);
+    cur.values[el.dataset.k]=isNaN(v)?null:v;S.measures[mon]=cur;saveDoc('measures',mon);
+  }else if(f==='wgoal'){
+    const mon=S.weekSel;S.weeks[mon]={...(S.weeks[mon]||{}),goal:el.value.trim()};saveDoc('weeks',mon);
   }else if(f==='tpl'){
     const subj=curSubj();if(!subj)return;
     setTpl(subj,c=>{if(c[+el.dataset.i])c[+el.dataset.i].label=el.value.trim()||'Campo'});
@@ -1036,7 +1095,7 @@ async function copyText(t,title){
 }
 function exportObj(withImages){
   const med={};Object.entries(S.med).forEach(([k,m])=>{const c={...m};if(!withImages)delete c.image;med[k]=c});
-  return {version:1,days:S.days,workouts:S.workouts,study:S.study,med,weeks:S.weeks,notes:S.notes,cfg:S.cfg};
+  return {version:1,days:S.days,workouts:S.workouts,study:S.study,med,weeks:S.weeks,notes:S.notes,measures:S.measures,cfg:S.cfg};
 }
 function downloadJSON(){
   const blob=new Blob([JSON.stringify(exportObj(true))],{type:'application/json'}),a=document.createElement('a');
@@ -1047,7 +1106,7 @@ async function importJSON(txt){
   let o;try{o=JSON.parse(txt)}catch(e){toast('Eso no es un JSON válido');return false}
   if(!o||typeof o!=='object'){toast('Eso no es un JSON válido');return false}
   let n=0;
-  for(const coll of ['days','workouts','study','med','weeks','notes']){
+  for(const coll of ['days','workouts','study','med','weeks','notes','measures']){
     const src=o[coll];if(!src||typeof src!=='object')continue;
     for(const [id,v] of Object.entries(src)){
       if(!/^[A-Za-z0-9_.\-]{1,80}$/.test(id)||!v||typeof v!=='object')continue;
@@ -1061,9 +1120,11 @@ async function importJSON(txt){
 }
 function weekText(mon){
   const st=weekStats(mon),g=S.cfg,out=[];
-  out.push('Resumen de mi semana del '+mon+' al '+addDays(mon,6)+'. Escribe tus observaciones para mejorar la próxima semana y devuélvemelas en este formato JSON para importarlo en mi app:');
+  out.push('Resumen de mi semana del '+mon+' al '+addDays(mon,6)+'. Evalúa mi semana según mi objetivo, mis medidas y mis datos, y escribe observaciones para mejorar la próxima semana. Devuélvemelas en este formato JSON para importarlo en mi app:');
   out.push('{"weeks":{"'+mon+'":{"summary":"...","wins":["..."],"focus":["..."],"updatedAt":"'+todayStr()+'"}}}');
   out.push('');
+  const goalTxt=(S.weeks[mon]||{}).goal;
+  if(goalTxt){out.push('Objetivo de esta semana: '+goalTxt);out.push('')}
   out.push('Metas diarias: '+g.kcal+' kcal, '+g.protein+' g proteína, '+g.steps+' pasos, '+g.sleep+' h sueño, '+g.study+' h estudio.');
   out.push('');
   st.dates.forEach(d=>{
@@ -1071,6 +1132,11 @@ function weekText(mon){
     const gy=w&&(w.exercises||[]).length?(w.title||'Gym')+' ('+(w.minutes||0)+' min): '+w.exercises.map(e=>(e.name||'?')+' '+(e.sets||[]).filter(s=>s.kg!=null||s.reps!=null).map(s=>(s.kg??'?')+'x'+(s.reps??'?')+(s.rir!=null?' @'+s.rir+'RIR':'')).join(', ')).join('; '):'sin gym';
     const sb=((S.study[d]||{}).entries||[]).map(e=>e.subject+' '+e.hours+' h').join(', ')||'sin estudio';
     out.push(d+': peso '+(x.weight??'—')+' kg; '+(x.kcal??'—')+' kcal (P '+(x.protein??'—')+' / C '+(x.carbs??'—')+' / G '+(x.fat??'—')+'); pasos '+(x.steps??'—')+'; sueño '+(x.sleep??'—')+' h; '+sb+'; '+gy+'; medicina: '+(ml.map(m=>m.topic).join(', ')||'no'));
+  });
+  out.push('');out.push('Medidas del domingo en cm (valor actual, semana previa y hace 4 semanas):');
+  MEAS.forEach(([k,l])=>{
+    const v=((S.measures[mon]||{}).values||{})[k],pv=measPrev(mon,k),w4=((S.measures[addDays(mon,-28)]||{}).values||{})[k];
+    out.push('- '+l+': '+(v!=null?v:'sin medir')+' (previa '+(pv?pv.v:'—')+'; hace 4 sem. '+(w4!=null?w4:'—')+')');
   });
   const names=new Set();
   st.dates.forEach(d=>((S.workouts[d]||{}).exercises||[]).forEach(e=>e.name&&names.add(e.name.trim())));
@@ -1124,9 +1190,10 @@ function sub(name,key){
 sub.seen={};
 render();
 (async()=>{
-  try{await Store.init()}catch(e){console.error(e)}
+  const opened=await Promise.race([Store.init().then(()=>true).catch(e=>{console.error(e);return true}),new Promise(r=>setTimeout(()=>r(false),8000))]);
+  if(!opened){S.offline=true;S.offlineMsg='El teléfono tardó demasiado en abrir los datos guardados. Cierra la app por completo y vuelve a abrirla.';render();return}
   db=Store;
-  sub('days','days');sub('workouts','workouts');sub('study','study');sub('med','med');sub('weeks','weeks');sub('config','cfg');sub('notes','notes');
+  sub('days','days');sub('workouts','workouts');sub('study','study');sub('med','med');sub('weeks','weeks');sub('config','cfg');sub('notes','notes');sub('measures','measures');
   if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 })();

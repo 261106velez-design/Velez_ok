@@ -1,6 +1,6 @@
 // Guarda la app en el teléfono para que abra sin internet.
-// Sube el número de VERSION cada vez que cambie algún archivo.
-const VERSION = 'bitacora-v1';
+// Sube el número de VERSION cada vez que cambie la lista de archivos.
+const VERSION = 'bitacora-v2';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -11,12 +11,22 @@ self.addEventListener('activate', e => {
     caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())
   );
 });
-// Con internet trae la versión nueva; sin internet usa la guardada.
+
+// Abre al instante con lo guardado si internet tarda más de 2.5 s.
+// Si internet responde rápido, usa la versión nueva. Siempre actualiza lo guardado en segundo plano.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
-  e.respondWith(
-    fetch(e.request)
-      .then(r => { const copy = r.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); return r; })
-      .catch(() => caches.match(e.request).then(r => r || caches.match('index.html')))
-  );
+  const work = (async () => {
+    const cache = await caches.open(VERSION);
+    const cached = (await cache.match(e.request, { ignoreSearch: true })) ||
+      (e.request.mode === 'navigate' ? await cache.match('index.html') : undefined);
+    const net = fetch(e.request)
+      .then(r => { if (r && r.ok) cache.put(e.request, r.clone()); return r; })
+      .catch(() => null);
+    e.waitUntil(net);
+    if (!cached) return (await net) || Response.error();
+    const timeout = new Promise(res => setTimeout(() => res(null), 2500));
+    return (await Promise.race([net, timeout])) || cached;
+  })();
+  e.respondWith(work);
 });
